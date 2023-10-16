@@ -1,8 +1,9 @@
+#include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
 #include <BH1750.h>
-#include <Arduino.h>
+#include <List.hpp>
 
 //BME680 Setup
 Adafruit_BME680 bme;
@@ -14,13 +15,17 @@ BH1750 lightMeter(0x23);
 #define DIRO 7
 
 String command;
-int deviceAddress = 0;
+int command_address;
+int target_address;
+
+
 String deviceIdentification = "allccccccccmmmmmmvvvxxx";
 
+void prase_command();
 
 class sensor{
   public:
-    int address = 0;
+    int address; // Will be used to identify the sensors involved
 
     virtual float get_raw_value(); // Gets the raw sensor_value
     virtual void setup(); // Used to initialise the sensors
@@ -35,8 +40,47 @@ class sensor{
     }
 };
 
+
+class SDI12_device { 
+  // This class is the main class that that has a bunch of sensors attached to it
+  // and will handle sensor initialization
+  public:
+  List<sensor>sensor_list;
+  int deviceAddress = 0; // The default device address
+
+  int get_device_address() {
+     return deviceAddress; 
+     }
+
+  void set_device_address(int set_deviceAddress) { 
+    deviceAddress = set_deviceAddress; 
+    }
+    
+    void attach_sensor(sensor sensor){
+      sensor_list.add(sensor);
+      //sensors.push_back(sensor);
+    }
+
+  String Read_Sensors() {
+    String output;
+    for (int i = 0; i < sensor_list.getSize(); i++) {
+      output = String(sensor_list.getValue(i).get_raw_value()) + String("\n");
+    }
+  }
+
+
+    void initialize_attached_sensors(){
+    for (int i = 0; i < sensor_list.getSize(); i++) {
+        sensor_list.getValue(i).setup();
+      }
+    }
+};
+
+
+
 class BME_Sensor : public sensor{
   public:
+  int address = 1; // Default SDI-12 address
   float get_raw_value() override{
     bme.performReading();
     return (bme.readTemperature()); 
@@ -56,6 +100,7 @@ class BME_Sensor : public sensor{
 
 class BH_Sensor : public sensor{
   public:
+  int address = 2; // Default SDI-12 address
     float get_raw_value() override{
       return (lightMeter.readLightLevel());// Note that this is an unsigned 16bit - might need to parse if code not working 
     }
@@ -66,8 +111,12 @@ class BH_Sensor : public sensor{
     }
 };
 
+
+
 BME_Sensor bme_sensor;
 BH_Sensor bh_sensor;
+
+SDI12_device this_device;
 
 void SDI12Send(String message) {
   Serial.print("message: "); Serial.println(message);
@@ -82,46 +131,60 @@ void SDI12Send(String message) {
   //secondruntoken = 0;
 }
 
-
 void SDI12Receive(String input) {
   //convert device address to string
-  String address = String(deviceAddress);
-  //Determines if the command is addressed for this device
-  if (String(input.charAt(0)) == address) {  
-    //Repond to Start Measurement command "aTEST!"   **Notice: Not correctly implemented, this only demostrates command and usuage of I2C sensors
-    if ((String(input.charAt(1)) == "T") && (String(input.charAt(2)) == "E")&& (String(input.charAt(3)) == "S")&& (String(input.charAt(4)) == "T") ) {
 
-      SDI12Send(String(bme_sensor.get_raw_value()));
-      SDI12Send(String(bh_sensor.get_raw_value()));
-      Serial.println("Responding to TEST command");
-    }
-  }  
+
+  if (input.length() == 3){
+    command = String(input.charAt(1));
+    target_address = int(input.charAt(2)-'0');
+  }
+  else if(input.length() == 4){
+    command = String(String(input.charAt(1))+String(input.charAt(2)));
+    target_address = int(input.charAt(3)-'0');
+  }
+  else{
+    command = String(input.charAt(0));
+  }
+
+  Serial.println(String("Command Breakdown:\n CMD: "+ command+" target: "+ String(target_address)));
+  // prase_command(command);
 }
 
 
+void prase_command(String command,int device_address = 0,int sensor_address = 0, int value_set = 0){ // Cannot use a switch in cpp 😥
+  if(command.equals("?")){
+    SDI12Send(String(device_address));
+  }
+  if(command.equals("A")){
+    device_address = value_set;
+    //  change address Query Command
+  }
+  if(command.equals("AS")){
+    // Change Sensor Address for ur 
+
+  }
+  if(command.equals("M")){
+    //start Measuring da boi
+  }
+  if(command.equals("D") ){
+    // Send data command
+}
+  if(command.equals("I")){
+    //Send Identication data
+  }
+}
 
 void setup() {
   //Arduino IDE Serial Monitor
   Serial.begin(9600);
 
-  // BME_Sensor bme_sensor;
-  bme_sensor.setup();
-  bh_sensor.setup();
-
-  // ================ BME680 ================
-  // if (!bme.begin(0x76)) {
-  //   Serial.println("Could not find a valid BME680 sensor, check wiring!");
-  //   while (1);
-  // }
-    // Set the temperature, pressure and humidity oversampling
-  // bme.setTemperatureOversampling(BME680_OS_8X);
-  // bme.setPressureOversampling(BME680_OS_8X);
-  // bme.setHumidityOversampling(BME680_OS_2X);
 
 
-  // ================ BH1750 ================
-  // Wire.begin();
-  // lightMeter.begin();
+// Sensor Setup
+  this_device.attach_sensor(bme_sensor);
+  this_device.attach_sensor(bh_sensor);
+  this_device.initialize_attached_sensors();
 
 
   // ================ SDI-12 ================
