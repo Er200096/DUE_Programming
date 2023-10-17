@@ -16,13 +16,15 @@ BH1750 lightMeter(0x23);
 #define Num_Of_Sensors 3
 
 String command;
+String Raw_command;
 int command_address;
 int target_address;
+int value_sent;
+int device_address_to;
 
 
 String deviceIdentification = "allccccccccmmmmmmvvvxxx";
 
-void prase_command();
 
 class sensor{
   public:
@@ -37,7 +39,6 @@ class sensor{
 
     void set_address(int new_address){ // This will be used to set the address of the sensors in change of address commands
       address = new_address;
-      Serial.println("New address Set");
     }
 };
 
@@ -67,6 +68,14 @@ class SDI12_device {
       //sensors.push_back(sensor);
     }
 
+    String get_a_sensor_name(int sensor_id){
+      for (int i = 0; i < sensor_list.size(); i++) {
+        if(sensor_list.get(i)->address == sensor_id){
+          return sensor_list.get(i)->name;
+          } 
+        }
+    }
+
   String Read_Sensors() {
     String output;
     for (int i = 0; i < sensor_list.size(); i++) {
@@ -75,7 +84,8 @@ class SDI12_device {
     return output;
   }
     void initialize_attached_sensors(){
-    for (int i = 0; i < sensor_list.size(); i++) {
+    for (int i = 0; i <= sensor_list.size()-1; i++) {
+      Serial.println("Sensor initialized ");
         sensor_list.get(i)->setup_sensor();
       }
     }
@@ -118,11 +128,8 @@ class BH_Sensor : public sensor{
     }
 };
 
-
-
 BME_Sensor* bme_sensor;
 BH_Sensor* bh_sensor;
-
 SDI12_device this_device;
 
 void SDI12Send(String message) {
@@ -138,66 +145,81 @@ void SDI12Send(String message) {
   //secondruntoken = 0;
 }
 
-String SDI12Receive(String input) {
-  //convert device address to string
-
-
-  if (input.length() == 3){
-    command = String(input.charAt(1));
-    target_address = int(input.charAt(2)-'0');
+void prase_command(String this_command, int device_address = 0,int value_set = 0,int sensor_address = 0){ // Cannot use a string switch in cpp  😥
+  if(this_command.equals("?")){
+    SDI12Send(String(this_device.deviceAddress));
   }
-  else if(input.length() == 4){
-    command = String(String(input.charAt(1))+String(input.charAt(2)));
-    target_address = int(input.charAt(3)-'0');
+  else if(device_address != this_device.deviceAddress){
+    SDI12Send("Invalid device address");
   }
   else{
-    command = String(input.charAt(0)); 
-  }
-  return command;
+    if(this_command.equals("A")){
 
-  Serial.println(String("Command Breakdown:\n CMD: "+ command+" target: "+ String(target_address)));
-  // prase_command(command);
+        this_device.set_device_address(value_set);
+        SDI12Send(String("ID changed to: " + String(this_device.deviceAddress)));
+    }
+
+    if(this_command.equals("M")){ // Start scatter plot GUI with readings
+      
+      this_device.attach_sensor(bme_sensor);
+      this_device.attach_sensor(bh_sensor);
+      // this_device.initialize_attached_sensors();\
+      
+      bh_sensor->setup_sensor();
+      //bme_sensor->setup_sensor();
+      
+      //SDI12Send("Sensors Initialized");
+    Serial.println("Initializing Sensors");
+      // Give formatted values to string so they can be saved onto SD card.
+
+    }
+    if(command.equals("D") ){
+      // Send data command
+  }
+    if(command.equals("I")){
+      //Send Identication data
+    }
+  }
 }
 
 
-void prase_command(String command,int device_address = 0,int sensor_address = 0, int value_set = 0){ // Cannot use a string switch in cpp  😥
-  if(command.equals("?")){
-    SDI12Send(String(this_device.get_device_address()));
-    // SDI12Send(String(device_address));
-  }
-  if(command.equals("A")){
-    this_device.set_device_address(value_set);
-    SDI12Send(String("Device ID changed to: " + this_device.get_device_address()));
+int SDI12Receive(String input) {
+  //convert device address to string
+  device_address_to = int(input.charAt(0)-'0');
+
+  switch(input.length()){
+    case 2:
+      command = String(input.charAt(1)); 
+    case 3:
+      command = String(input.charAt(1));
+      value_sent = int(input.charAt(2)-'0');
+    break;
+  
+    case 4:
+      command = String(String(input.charAt(1))+String(input.charAt(2)));
+      value_sent = int(input.charAt(3)-'0');
+    break;
+
+    default:
+      command = String(input.charAt(0)); 
+    break;
   }
 
-  if(command.equals("AS")){
-    SDI12Send("Please select a sensor to change its address: ");
-    while(!Serial.available()){} // wait until reponse is sent from user 
-      SDI12Receive();//
-    // Change Sensor Address for ur 
-    
-  }
-  if(command.equals("M")){ // Start scatter plot GUI with readings
-    //start Measuring da boi
-    // Give formatted values to string so they can be saved onto SD card.
+  Serial.println(String("Command Breakdown:\n CMD: "+ command+" target: "+ String(value_sent)));
+  prase_command(command, device_address_to, value_sent); 
 
-  }
-  if(command.equals("D") ){
-    // Send data command
+  return 1;
+
 }
-  if(command.equals("I")){
-    //Send Identication data
-  }
-}
+
 
 void setup() {
   //Arduino IDE Serial Monitor
   Serial.begin(9600);
+  Serial.println("SETUP");
 
 // Sensor Setup
-  this_device.attach_sensor(bme_sensor);
-  this_device.attach_sensor(bh_sensor);
-  this_device.initialize_attached_sensors();
+  
 
 
   // ================ SDI-12 ================
@@ -210,18 +232,17 @@ void setup() {
 
 void loop() {
   int byte;
-  // Serial.println("I AM RUNING");
   //Receive SDI-12 over UART and then print to Serial Monitor
   if(Serial1.available()) {
     byte = Serial1.read();        //Reads incoming communication in bytes
-    Serial.println(byte);
+    // Serial.println(byte);
     if (byte == 33) {             //If byte is command terminator (!)
-      SDI12Receive(command);
-      Serial.println(command);
-      command = "";               //reset command string
+      SDI12Receive(Raw_command);
+      // Serial.println(command);
+      Raw_command = "";               //reset command string
     } else {
       if (byte != 0) {            //do not add start bit (0)
-      command += char(byte);      //append byte to command string
+      Raw_command += char(byte);      //append byte to command string
       }
     }
   }
