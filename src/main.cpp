@@ -163,7 +163,8 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
       
       this_device.attach_sensor(bme_sensor);
       this_device.attach_sensor(bh_sensor);
-      // this_device.initialize_attached_sensors();\
+      // this_device.initialize_attached_sensors();
+      
       
       bh_sensor->setup_sensor();
       //bme_sensor->setup_sensor();
@@ -219,9 +220,6 @@ void setup() {
   Serial.println("SETUP");
 
 // Sensor Setup
-  
-
-
   // ================ SDI-12 ================
   Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
   pinMode(DIRO, OUTPUT);               //DIRO Pin
