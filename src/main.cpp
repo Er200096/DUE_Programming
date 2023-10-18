@@ -22,6 +22,7 @@ int target_address;
 int value_sent;
 int device_address_to;
 
+bool sensors_init_request;
 
 String deviceIdentification = "allccccccccmmmmmmvvvxxx";
 
@@ -43,53 +44,7 @@ class sensor{
 };
 
 
-class SDI12_device { 
-  // This class is the main class that that has a bunch of sensors attached to it
-  // and will handle sensor initialization
-  public:
 
-    LinkedList<sensor*> sensor_list; // List of pointers to sensors
-
-  // sensor sensor_list[Num_Of_Sensors];
-  int deviceAddress = 0; // The default device address
-
-  String sendID = String(deviceAddress + "14ENG20009103218929xxx...xx<CR><LF>");
-
-  int get_device_address() {
-     return deviceAddress; 
-     }
-
-  void set_device_address(int set_deviceAddress) { 
-    deviceAddress = set_deviceAddress; 
-    }
-    
-    void attach_sensor(sensor* sensor){
-      sensor_list.add(sensor);
-      //sensors.push_back(sensor);
-    }
-
-    String get_a_sensor_name(int sensor_id){
-      for (int i = 0; i < sensor_list.size(); i++) {
-        if(sensor_list.get(i)->address == sensor_id){
-          return sensor_list.get(i)->name;
-          } 
-        }
-    }
-
-  String Read_Sensors() {
-    String output;
-    for (int i = 0; i < sensor_list.size(); i++) {
-      output = String(sensor_list.get(i)->get_raw_value()) + String("\n");
-    }
-    return output;
-  }
-    void initialize_attached_sensors(){
-    for (int i = 0; i <= sensor_list.size()-1; i++) {
-      Serial.println("Sensor initialized ");
-        sensor_list.get(i)->setup_sensor();
-      }
-    }
-};
 
 
 
@@ -101,6 +56,8 @@ class BME_Sensor : public sensor{
     bme.performReading();
     return (bme.readTemperature()); 
   }
+
+
 
   void setup_sensor() override{
     if (!bme.begin(0x76)) {
@@ -130,7 +87,61 @@ class BH_Sensor : public sensor{
 
 BME_Sensor* bme_sensor;
 BH_Sensor* bh_sensor;
+
+class SDI12_device { 
+  // This class is the main class that that has a bunch of sensors attached to it
+  // and will handle sensor initialization
+  public:
+
+    LinkedList<sensor*> sensor_list; // List of pointers to sensors
+
+  // sensor sensor_list[Num_Of_Sensors];
+  int deviceAddress = 0; // The default device address
+
+  String sensor_ID = String(deviceAddress + "14ENG20009103218929xxx...xx<CR><LF>");
+
+  int get_device_address() {
+     return deviceAddress; 
+     }
+
+  void set_device_address(int set_deviceAddress) { 
+    deviceAddress = set_deviceAddress; 
+    }
+    
+    void attach_sensor(sensor* sensor){
+      sensor_list.add(sensor);
+      //sensors.push_back(sensor);
+    }
+
+    String get_a_sensor_name(int sensor_id){
+      for (int i = 0; i < sensor_list.size(); i++) {
+        if(sensor_list.get(i)->address == sensor_id){
+          return sensor_list.get(i)->name;
+          } 
+        }
+    }
+
+  String Read_Sensors() {
+    String output;
+    for (int i = 0; i < sensor_list.size(); i++) {
+      output = String(sensor_list.get(i)->get_raw_value()) + String("\n");
+    }
+    return output;
+  }
+
+    void initialize_attached_sensors(){
+  
+    // for (int i = 0; i <= sensor_list.size()-1; i++) {
+    //   Serial.println("Sensor initialized ");
+    //     // sensor_list.get(i)->setup_sensor();
+    //   }
+      Serial.println(bme_sensor->test());
+
+    }
+};
+
 SDI12_device this_device;
+
 
 void SDI12Send(String message) {
   Serial.print("message: "); Serial.println(message);
@@ -161,16 +172,21 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
 
     if(this_command.equals("M")){ // Start scatter plot GUI with readings
       
+      if(!sensors_init_request){
       this_device.attach_sensor(bme_sensor);
       this_device.attach_sensor(bh_sensor);
-      // this_device.initialize_attached_sensors();
+      this_device.initialize_attached_sensors();
+      sensors_init_request = true;
+      }
+      else{
+          Serial.println("Sensors already initialized");
+      }
       
       
-      bh_sensor->setup_sensor();
+      
       //bme_sensor->setup_sensor();
       
       //SDI12Send("Sensors Initialized");
-    Serial.println("Initializing Sensors");
       // Give formatted values to string so they can be saved onto SD card.
 
     }
@@ -190,6 +206,7 @@ int SDI12Receive(String input) {
 
   switch(input.length()){
     case 2:
+    
       command = String(input.charAt(1)); 
     case 3:
       command = String(input.charAt(1));
@@ -215,12 +232,11 @@ int SDI12Receive(String input) {
 
 
 void setup() {
-  //Arduino IDE Serial Monitor
+  //Arduino IDE Serial Monitors
   Serial.begin(9600);
   Serial.println("SETUP");
+  // this_device.initialize_attached_sensors();
 
-// Sensor Setup
-  // ================ SDI-12 ================
   Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
   pinMode(DIRO, OUTPUT);               //DIRO Pin
 
@@ -231,6 +247,7 @@ void setup() {
 void loop() {
   int byte;
   //Receive SDI-12 over UART and then print to Serial Monitor
+
   if(Serial1.available()) {
     byte = Serial1.read();        //Reads incoming communication in bytes
     // Serial.println(byte);
@@ -245,5 +262,4 @@ void loop() {
     }
   }
 }
-
 
