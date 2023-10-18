@@ -29,34 +29,25 @@ String deviceIdentification = "allccccccccmmmmmmvvvxxx";
 
 class sensor{
   public:
-    int address; // Will be used to identify the sensors involved
-    String name;
     virtual float get_raw_value(); // Gets the raw sensor_value
     virtual void setup_sensor(); // Used to initialise the sensors
-
-    int get_address(){ // Default address is gong to be zero for both sensors (Refer to address value)
-      return address;
-    }
-
-    void set_address(int new_address){ // This will be used to set the address of the sensors in change of address commands
-      address = new_address;
-    }
 };
 
 
 
-
-
-
 class BME_Sensor : public sensor{
-  public:
-  int address = 1; // Default SDI-12 address
   String name = "Pressure sensor (BME680)";
+
+  public:
+  int address = 1; // the declerastion for the 
   float get_raw_value() override{
     bme.performReading();
     return (bme.readTemperature()); 
   }
 
+  String get_name(){
+    return name;
+  }
 
 
   void setup_sensor() override{
@@ -85,8 +76,8 @@ class BH_Sensor : public sensor{
     }
 };
 
-BME_Sensor* bme_sensor;
-BH_Sensor* bh_sensor;
+BME_Sensor* bme_sensor = new BME_Sensor();
+BH_Sensor* bh_sensor = new BH_Sensor();
 
 class SDI12_device { 
   // This class is the main class that that has a bunch of sensors attached to it
@@ -113,13 +104,13 @@ class SDI12_device {
       //sensors.push_back(sensor);
     }
 
-    String get_a_sensor_name(int sensor_id){
-      for (int i = 0; i < sensor_list.size(); i++) {
-        if(sensor_list.get(i)->address == sensor_id){
-          return sensor_list.get(i)->name;
-          } 
-        }
-    }
+    // String get_a_sensor_name(int sensor_id){
+    //   for (int i = 0; i < sensor_list.size(); i++) {
+    //     if(sensor_list.get(i)->address == sensor_id){
+    //       return sensor_list.get(i)->name;
+    //       } 
+    //     }
+    // }
 
   String Read_Sensors() {
     String output;
@@ -131,16 +122,15 @@ class SDI12_device {
 
     void initialize_attached_sensors(){
   
-    // for (int i = 0; i <= sensor_list.size()-1; i++) {
-    //   Serial.println("Sensor initialized ");
-    //     // sensor_list.get(i)->setup_sensor();
-    //   }
-      Serial.println(bme_sensor->test());
-
+    for (int i = 0; i <= sensor_list.size()-1; i++) {
+      Serial.println("Sensor initialized ");
+        sensor_list.get(i)->setup_sensor();
+      }
     }
 };
 
-SDI12_device this_device;
+SDI12_device* this_device = new SDI12_device();
+
 
 
 void SDI12Send(String message) {
@@ -158,25 +148,25 @@ void SDI12Send(String message) {
 
 void prase_command(String this_command, int device_address = 0,int value_set = 0,int sensor_address = 0){ // Cannot use a string switch in cpp  😥
   if(this_command.equals("?")){
-    SDI12Send(String(this_device.deviceAddress));
+    SDI12Send(String(this_device->deviceAddress));
   }
-  else if(device_address != this_device.deviceAddress){
+  else if(device_address != this_device->deviceAddress){
     SDI12Send("Invalid device address");
   }
   else{
     if(this_command.equals("A")){
 
-        this_device.set_device_address(value_set);
-        SDI12Send(String("ID changed to: " + String(this_device.deviceAddress)));
+        this_device->set_device_address(value_set);
+        SDI12Send(String("ID changed to: " + String(this_device->deviceAddress)));
     }
 
     if(this_command.equals("M")){ // Start scatter plot GUI with readings
       
       if(!sensors_init_request){
-      this_device.attach_sensor(bme_sensor);
-      this_device.attach_sensor(bh_sensor);
-      this_device.initialize_attached_sensors();
-      sensors_init_request = true;
+        this_device->attach_sensor(bme_sensor);
+        this_device->attach_sensor(bh_sensor);
+        this_device->initialize_attached_sensors();
+        sensors_init_request = true;
       }
       else{
           Serial.println("Sensors already initialized");
