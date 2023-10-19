@@ -96,11 +96,13 @@ class SDI12_device {
 
   int deviceAddress = 0; // The default device address
 
-  String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929xxx...xx<CR><LF>");
 
   int get_device_address() {
      return deviceAddress; 
      }
+  
+    String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929xxx...xx<CR><LF>");
+
 
   void set_device_address(int set_deviceAddress) { 
     deviceAddress = set_deviceAddress; 
