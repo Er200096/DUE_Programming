@@ -31,12 +31,12 @@ class sensor{
   public:
     virtual float get_raw_value(); // Gets the raw sensor_value
     virtual void setup_sensor(); // Used to initialise the sensors
-    virtual int get_sensor_address(); //
+    virtual int get_sensor_address(); // returns the address of the sensors
 };
 
 
 
-class BME_Sensor : public sensor{
+class BME_Sensor : public sensor{ // 
   String name = "Pressure sensor (BME680)";
 
   public:
@@ -84,9 +84,6 @@ class BH_Sensor : public sensor{
     }
 };
 
-BME_Sensor* bme_sensor = new BME_Sensor();
-BH_Sensor* bh_sensor = new BH_Sensor();
-
 class SDI12_device { 
   // This class is the main class that that has a bunch of sensors attached to it
   // and will handle sensor initialization
@@ -110,7 +107,6 @@ class SDI12_device {
     
     void attach_sensor(sensor* sensor){
       sensor_list.add(sensor);
-      //sensors.push_back(sensor);
     }
 
     String Read_a_Sensor(int deviceAddress){
@@ -140,7 +136,8 @@ class SDI12_device {
 };
 
 SDI12_device* this_device = new SDI12_device();
-
+BME_Sensor* bme_sensor = new BME_Sensor();
+BH_Sensor* bh_sensor = new BH_Sensor();
 
 
 void SDI12Send(String message) {
@@ -231,10 +228,8 @@ int SDI12Receive(String input) {
 
 
 void setup() {
-  //Arduino IDE Serial Monitors
   Serial.begin(9600);
-  Serial.println("SETUP");
-  // this_device.initialize_attached_sensors();
+  Serial.println("SETUP"); // Making sure the due isnt dead
 
   Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
   pinMode(DIRO, OUTPUT);               //DIRO Pin
