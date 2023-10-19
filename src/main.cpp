@@ -31,6 +31,7 @@ class sensor{
   public:
     virtual float get_raw_value(); // Gets the raw sensor_value
     virtual void setup_sensor(); // Used to initialise the sensors
+    virtual int get_sensor_address(); //
 };
 
 
@@ -49,6 +50,9 @@ class BME_Sensor : public sensor{
     return name;
   }
 
+  int get_sensor_address() override{
+    return address;
+  }
 
   void setup_sensor() override{
     if (!bme.begin(0x76)) {
@@ -70,6 +74,10 @@ class BH_Sensor : public sensor{
       return (lightMeter.readLightLevel());// Note that this is an unsigned 16bit - might need to parse if code not working 
     }
 
+    int get_sensor_address() override{
+      return address;
+    }
+
     void setup_sensor() override{
         Wire.begin();
         lightMeter.begin();
@@ -86,10 +94,9 @@ class SDI12_device {
 
     LinkedList<sensor*> sensor_list; // List of pointers to sensors
 
-  // sensor sensor_list[Num_Of_Sensors];
   int deviceAddress = 0; // The default device address
 
-  String sensor_ID = String(deviceAddress + "14ENG20009103218929xxx...xx<CR><LF>");
+  String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929xxx...xx<CR><LF>");
 
   int get_device_address() {
      return deviceAddress; 
@@ -104,18 +111,19 @@ class SDI12_device {
       //sensors.push_back(sensor);
     }
 
-    // String get_a_sensor_name(int sensor_id){
-    //   for (int i = 0; i < sensor_list.size(); i++) {
-    //     if(sensor_list.get(i)->address == sensor_id){
-    //       return sensor_list.get(i)->name;
-    //       } 
-    //     }
-    // }
+    String Read_a_Sensor(int deviceAddress){
+    for (int i = 0; i < sensor_list.size(); i++) {
+      if(sensor_list.get(i)->get_sensor_address() == deviceAddress){
+        return String(sensor_list.get(i)->get_raw_value());
+        } 
+      }
+      return (String("-"));
+    }
 
   String Read_Sensors() {
     String output;
     for (int i = 0; i < sensor_list.size(); i++) {
-      output = String(sensor_list.get(i)->get_raw_value()) + String("\n");
+      output += String(sensor_list.get(i)->get_raw_value()) + String("\n");
     }
     return output;
   }
@@ -157,41 +165,43 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
     if(this_command.equals("A")){
 
         this_device->set_device_address(value_set);
-        SDI12Send(String("ID changed to: " + String(this_device->deviceAddress)));
+        SDI12Send(String(this_device->deviceAddress));
     }
 
     if(this_command.equals("M")){ // Start scatter plot GUI with readings
       
       if(!sensors_init_request){
+        
         this_device->attach_sensor(bme_sensor);
         this_device->attach_sensor(bh_sensor);
         this_device->initialize_attached_sensors();
+        SDI12Send(String(this_device->deviceAddress) + "001" + String(this_device->sensor_list.size()));
+
         sensors_init_request = true;
       }
       else{
           Serial.println("Sensors already initialized");
       }
-      
-      
-      
-      //bme_sensor->setup_sensor();
-      
-      //SDI12Send("Sensors Initialized");
-      // Give formatted values to string so they can be saved onto SD card.
-
     }
     if(command.equals("D") ){
-      // Send data command
+      switch(value_set){
+        case 0: // Display all readings 
+        Serial.println("Reading Sensors");
+        SDI12Send(this_device->Read_Sensors());
+        break;
+
+        default:
+        SDI12Send(this_device->Read_a_Sensor(value_set));
+        break;
+      }
   }
     if(command.equals("I")){
-      //Send Identication data
+      SDI12Send(this_device->sensor_ID); 
     }
   }
 }
 
-
 int SDI12Receive(String input) {
-  //convert device address to string
   device_address_to = int(input.charAt(0)-'0');
 
   switch(input.length()){
@@ -212,12 +222,9 @@ int SDI12Receive(String input) {
       command = String(input.charAt(0)); 
     break;
   }
-
-  Serial.println(String("Command Breakdown:\n CMD: "+ command+" target: "+ String(value_sent)));
-  prase_command(command, device_address_to, value_sent); 
-
-  return 1;
-
+    Serial.println(String("Command Breakdown:\n CMD: "+ command+" target: "+ String(value_sent)));
+    prase_command(command, device_address_to, value_sent); 
+    return 1;
 }
 
 
