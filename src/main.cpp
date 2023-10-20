@@ -31,16 +31,14 @@ class sensor{
   public:
     virtual float get_raw_value(); // Gets the raw sensor_value
     virtual void setup_sensor(); // Used to initialise the sensors
-    virtual int get_sensor_address(); // returns the address of the sensors
+    virtual int get_sensor_address(); //
 };
 
-
-
-class BME_Sensor : public sensor{ // 
+class BME_Sensor : public sensor{
   String name = "Pressure sensor (BME680)";
 
   public:
-  int address = 1; // the declerastion for the 
+  int address; // the declerastion for the 
   float get_raw_value() override{
     bme.performReading();
     return (bme.readTemperature()); 
@@ -66,9 +64,43 @@ class BME_Sensor : public sensor{ //
   } 
 };
 
+
+class BME_temprature : public BME_Sensor{
+  int address = 2;
+  float get_raw_value() override{
+    bme.performReading();
+    return (bme.readTemperature()); 
+  }
+};
+
+class BME_pressure : public BME_Sensor{
+  int address = 3;
+  float get_raw_value() override{
+    bme.performReading();
+    return (bme.readPressure()); 
+  }
+};
+
+class BME_altitude : public BME_Sensor{
+  int address = 4;
+  float get_raw_value() override{
+    bme.performReading();
+    return (bme.readAltitude(0)); 
+  }
+};
+
+class BME_humidty : public BME_Sensor{
+  int address = 5;
+  float get_raw_value() override{
+    bme.performReading();
+    return (bme.readHumidity()); 
+  }  
+};
+
+
 class BH_Sensor : public sensor{
   public:
-  int address = 2; // Default SDI-12 address
+  int address = 1; // Default SDI-12 address
   String name = "Light sensor (BH1750)";
     float get_raw_value() override{
       return (lightMeter.readLightLevel());// Note that this is an unsigned 16bit - might need to parse if code not working 
@@ -83,6 +115,9 @@ class BH_Sensor : public sensor{
         lightMeter.begin();
     }
 };
+
+// BME_Sensor* bme_sensor = new BME_Sensor();
+
 
 class SDI12_device { 
   // This class is the main class that that has a bunch of sensors attached to it
@@ -107,6 +142,7 @@ class SDI12_device {
     
     void attach_sensor(sensor* sensor){
       sensor_list.add(sensor);
+      //sensors.push_back(sensor);
     }
 
     String Read_a_Sensor(int deviceAddress){
@@ -136,8 +172,13 @@ class SDI12_device {
 };
 
 SDI12_device* this_device = new SDI12_device();
-BME_Sensor* bme_sensor = new BME_Sensor();
+
+BME_altitude* altitude_sensor = new BME_altitude();
+BME_humidty* humidity_sensor = new BME_humidty();
+BME_temprature* temperature_sensor = new BME_temprature();
+
 BH_Sensor* bh_sensor = new BH_Sensor();
+
 
 
 void SDI12Send(String message) {
@@ -171,7 +212,9 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
       
       if(!sensors_init_request){
         
-        this_device->attach_sensor(bme_sensor);
+        // this_device->attach_sensor(altitude_sensor);  Im having issues with getting a proper reading with the altitude sensor :(
+        this_device->attach_sensor(humidity_sensor);
+        this_device->attach_sensor(temperature_sensor);
         this_device->attach_sensor(bh_sensor);
         this_device->initialize_attached_sensors();
         SDI12Send(String(this_device->deviceAddress) + "001" + String(this_device->sensor_list.size()));
@@ -228,8 +271,10 @@ int SDI12Receive(String input) {
 
 
 void setup() {
+  //Arduino IDE Serial Monitors
   Serial.begin(9600);
-  Serial.println("SETUP"); // Making sure the due isnt dead
+  Serial.println("SETUP");
+  // this_device.initialize_attached_sensors();
 
   Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
   pinMode(DIRO, OUTPUT);               //DIRO Pin
@@ -256,4 +301,3 @@ void loop() {
     }
   }
 }
-
