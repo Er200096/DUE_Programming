@@ -32,6 +32,7 @@ class sensor{
     virtual float get_raw_value(); // Gets the raw sensor_value
     virtual void setup_sensor(); // Used to initialise the sensors
     virtual int get_sensor_address(); //
+    virtual String get_sensor_name();
 };
 
 class BME_Sensor : public sensor{
@@ -42,10 +43,6 @@ class BME_Sensor : public sensor{
   float get_raw_value() override{
     bme.performReading();
     return (bme.readTemperature()); 
-  }
-
-  String get_name(){
-    return name;
   }
 
   int get_sensor_address() override{
@@ -62,39 +59,80 @@ class BME_Sensor : public sensor{
     bme.setPressureOversampling(BME680_OS_8X);
     bme.setHumidityOversampling(BME680_OS_2X);
   } 
+   String get_sensor_name() override{
+    return name;
+  }
 };
 
 
 class BME_temprature : public BME_Sensor{
   int address = 2;
+  String name = "Temperature Sensor";
   float get_raw_value() override{
     bme.performReading();
     return (bme.readTemperature()); 
+  }
+  
+  int get_sensor_address() override{
+    return address;
+  }
+
+  String get_sensor_name() override{
+    return name;
   }
 };
 
 class BME_pressure : public BME_Sensor{
   int address = 3;
+  String name = "Pressure Sensor";
   float get_raw_value() override{
     bme.performReading();
     return (bme.readPressure()); 
   }
+  
+  int get_sensor_address() override{
+    return address;
+  }
+
+    String get_sensor_name() override{
+      return name;
+    }
 };
 
 class BME_altitude : public BME_Sensor{
+  String name = "Altitude Sensor";
   int address = 4;
   float get_raw_value() override{
     bme.performReading();
     return (bme.readAltitude(0)); 
   }
+  
+  int get_sensor_address() override{
+    return address;
+  }
+
+  String get_sensor_name() override{
+    return name;
+  }
+
 };
 
 class BME_humidty : public BME_Sensor{
   int address = 5;
+  String name = "Humidty Sensor";
   float get_raw_value() override{
     bme.performReading();
     return (bme.readHumidity()); 
   }  
+  
+  int get_sensor_address() override{
+    return address;
+  }
+ 
+  String get_sensor_name() override{
+    return name;
+  }
+  
 };
 
 
@@ -114,6 +152,10 @@ class BH_Sensor : public sensor{
         Wire.begin();
         lightMeter.begin();
     }
+
+  String get_sensor_name() override{
+    return name;
+  }
 };
 
 // BME_Sensor* bme_sensor = new BME_Sensor();
@@ -146,12 +188,12 @@ class SDI12_device {
     }
 
     String Read_a_Sensor(int deviceAddress){
-    for (int i = 0; i < sensor_list.size(); i++) {
-      if(sensor_list.get(i)->get_sensor_address() == deviceAddress){
-        return String(sensor_list.get(i)->get_raw_value());
+      if(sensor_list.size() >= deviceAddress){
+        return String(sensor_list.get(deviceAddress-1)->get_raw_value());
         } 
-      }
+      else{
       return (String("-"));
+      }
     }
 
   String Read_Sensors() {
@@ -169,6 +211,14 @@ class SDI12_device {
         sensor_list.get(i)->setup_sensor();
       }
     }
+
+    String pretty_print_sensor_values(String TIME){ // USE THE RTC value for this
+      String output;
+      for (int i = 0; i < sensor_list.size(); i++) {
+        output += String(sensor_list.get(i)->get_sensor_name()) +" : " + String(sensor_list.get(i)->get_raw_value()) + String("\n");
+    }
+    return output; // Note To This is basically the output you wanna use to write to the sensor output file
+    }
 };
 
 SDI12_device* this_device = new SDI12_device();
@@ -176,9 +226,7 @@ SDI12_device* this_device = new SDI12_device();
 BME_altitude* altitude_sensor = new BME_altitude();
 BME_humidty* humidity_sensor = new BME_humidty();
 BME_temprature* temperature_sensor = new BME_temprature();
-
 BH_Sensor* bh_sensor = new BH_Sensor();
-
 
 
 void SDI12Send(String message) {
@@ -215,8 +263,10 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
         // this_device->attach_sensor(altitude_sensor);  Im having issues with getting a proper reading with the altitude sensor :(
         this_device->attach_sensor(humidity_sensor);
         this_device->attach_sensor(temperature_sensor);
+        this_device->attach_sensor(altitude_sensor);
         this_device->attach_sensor(bh_sensor);
         this_device->initialize_attached_sensors();
+
         SDI12Send(String(this_device->deviceAddress) + "001" + String(this_device->sensor_list.size()));
 
         sensors_init_request = true;
@@ -225,6 +275,7 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
           Serial.println("Sensors already initialized");
       }
     }
+
     if(command.equals("D") ){
       switch(value_set){
         case 0: // Display all readings 
