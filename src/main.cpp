@@ -5,7 +5,7 @@
 #include <BH1750.h>
 #include <Array.h>
 #include <LinkedList.h>
-#include "SuperWatchDog.h"
+// #include "SuperWatchDog.h"
 
 //BME680 Setup
 Adafruit_BME680 bme;
@@ -16,6 +16,8 @@ BH1750 lightMeter(0x23);
 //SDI-12 Setup
 #define DIRO 7
 #define Num_Of_Sensors 3
+#define watchdog_time 3000 // 3 seconds
+
 
 String command;
 String Raw_command;
@@ -26,7 +28,12 @@ int device_address_to;
 
 bool sensors_init_request;
 
-String deviceIdentification = "allccccccccmmmmmmvvvxxx";
+
+/**********************************************
+ *       watchdog Setup 🐕‍🦺                   *
+ **********************************************/
+void watchdogSetup(void) {} // to enable the watchdog service 
+
 
 /**********************************************
  *       ✨Class declarations here ✨        *
@@ -200,6 +207,7 @@ class SDI12_device {
 
   String Read_Sensors() {
     String output;
+    watchdogReset();
     for (int i = 0; i < sensor_list.size(); i++) {
       output += String(sensor_list.get(i)->get_raw_value()) + String("\n");
     }
@@ -207,8 +215,8 @@ class SDI12_device {
   }
 
     void initialize_attached_sensors(){
-  
-    for (int i = 0; i <= sensor_list.size()-1; i++) {
+    watchdogReset();
+    for (int i = 0; i <= sensor_list.size()-1; i++) { // Should be -1
       Serial.println("Sensor initialized ");
         sensor_list.get(i)->setup_sensor();
       }
@@ -304,6 +312,8 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
 }
 
 int SDI12Receive(String input) {
+  watchdogEnable(watchdog_time);
+
   device_address_to = int(input.charAt(0)-'0');
 
   switch(input.length()){
@@ -328,7 +338,6 @@ int SDI12Receive(String input) {
     prase_command(command, device_address_to, value_sent); 
     return 1;
 }
-
 
 /**********************************************
  *       Default Arduino Setup function       *
@@ -355,6 +364,7 @@ void setup() {
 void loop() {
   int byte;
   //Receive SDI-12 over UART and then print to Serial Monitor
+  watchdogReset();
 
   if(Serial1.available()) {
     byte = Serial1.read();        //Reads incoming communication in bytes

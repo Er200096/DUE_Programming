@@ -5,6 +5,6 @@ class SuperWatchDog{
     int timer_seconds;
     
     public:
-    void setup_watchdog()
+    void setup_watchdog();
     int StartwatchDog();
 };
