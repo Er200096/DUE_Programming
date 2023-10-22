@@ -5,6 +5,8 @@
 #include <BH1750.h>
 #include <Array.h>
 #include <LinkedList.h>
+#include <OneWire.h>
+
 // #include "SuperWatchDog.h"
 
 //BME680 Setup
@@ -173,62 +175,92 @@ class BH_Sensor : public sensor{
 class SDI12_device { 
   // This class is the main class that that has a bunch of sensors attached to it
   // and will handle sensor initialization
-  public:
+  protected:
+    OneWire ds(8);
 
-    LinkedList<sensor*> sensor_list; // List of pointers to sensors
-
-  int deviceAddress = 0; // The default device address
-
-
-  int get_device_address() {
-     return deviceAddress; 
-     }
-  
-    String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929xxx...xx<CR><LF>");
-
-
-  void set_device_address(int set_deviceAddress) { 
-    deviceAddress = set_deviceAddress; 
+    void save_to_EEPROM(String data){   
+      char dataChars[30];
+      data.toCharArray(dataChars, 30);
+      // Write the data to the EEPROM
+      ds.reset(); //reset device
+      ds.select(addr);//select address of device to talk to
+      ds.write(0x0F,1);   // Write ScratchPad       Configuration/mode bytes can be in datasheet
+      ds.write(0x01,1);   //TA1 addresses           TA (Target Address) can also be found in the datasheet
+      ds.write(0x09,1);   //TA2 addresses
+      for ( int i = 0; i < data.length(); i++) {
+        ds.write(dataChars[i],1);
+      }
+      ds.reset();
+      ds.select(addr);
+      ds.write(0x0F, 1);  // Copy ScratchPad 
     }
+
+    String readFromEEPROM(int length) {
+      byte dataBytes[30];
+      ds.reset();
+      ds.select(addr);
+      ds.write(0xAA);  // Read Scratchpad
+      for (int i = 0; i < length+4; i++) {
+        dataBytes[i] = ds.read();
+      }
+      return String((char*)dataBytes).substring(3);
+    }
+
     
-    void attach_sensor(sensor* sensor){
-      sensor_list.add(sensor);
-      //sensors.push_back(sensor);
-    }
+  
 
-    String Read_a_Sensor(int deviceAddress){
-      if(sensor_list.size() >= deviceAddress){
-        return String(sensor_list.get(deviceAddress-1)->get_raw_value());
-        } 
-      else{
-      return (String("-"));
+  public:
+    LinkedList<sensor*> sensor_list; // List of pointers to sensors
+    int deviceAddress = 0; // The default device address
+
+    int get_device_address() {
+      return deviceAddress; 
       }
-    }
+    
+      String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929xxx...xx<CR><LF>");
 
-  String Read_Sensors() {
-    String output;
-    watchdogReset();
-    for (int i = 0; i < sensor_list.size(); i++) {
-      output += String(sensor_list.get(i)->get_raw_value()) + String("\n");
-    }
-    return output;
-  }
-
-    void initialize_attached_sensors(){
-    watchdogReset();
-    for (int i = 0; i <= sensor_list.size()-1; i++) { // Should be -1
-      Serial.println("Sensor initialized ");
-        sensor_list.get(i)->setup_sensor();
+    void set_device_address(int set_deviceAddress) { 
+      deviceAddress = set_deviceAddress; 
       }
-    }
+      
+      void attach_sensor(sensor* sensor){
+        sensor_list.add(sensor);
+        //sensors.push_back(sensor);
+      }
 
-    String pretty_print_sensor_values(String TIME){ // USE THE RTC value for this
+      String Read_a_Sensor(int deviceAddress){
+        if(sensor_list.size() >= deviceAddress){
+          return String(sensor_list.get(deviceAddress-1)->get_raw_value());
+          } 
+        else{
+        return (String("-"));
+        }
+      }
+
+    String Read_Sensors() {
       String output;
+      watchdogReset();
       for (int i = 0; i < sensor_list.size(); i++) {
-        output += String(sensor_list.get(i)->get_sensor_name()) +" : " + String(sensor_list.get(i)->get_raw_value()) + String("\n");
+        output += String(sensor_list.get(i)->get_raw_value()) + String("\n");
+      }
+      return output;
     }
-    return output; // Note To This is basically the output you wanna use to write to the sensor output file
-    }
+
+      void initialize_attached_sensors(){
+      watchdogReset();
+      for (int i = 0; i <= sensor_list.size()-1; i++) { // Should be -1
+        Serial.println("Sensor initialized ");
+          sensor_list.get(i)->setup_sensor();
+        }
+      }
+
+      String pretty_print_sensor_values(String TIME){ // USE THE RTC value for this
+        String output;
+        for (int i = 0; i < sensor_list.size(); i++) {
+          output += String(sensor_list.get(i)->get_sensor_name()) +" : " + String(sensor_list.get(i)->get_raw_value()) + String("\n");
+      }
+      return output; // Note To This is basically the output you wanna use to write to the sensor output file
+      }
 };
 
 /**********************************************
