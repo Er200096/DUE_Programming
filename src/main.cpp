@@ -5,6 +5,8 @@
 #include <BH1750.h>
 #include <Array.h>
 #include <LinkedList.h>
+#include "SuperWatchDog.h"
+
 //BME680 Setup
 Adafruit_BME680 bme;
 
@@ -26,6 +28,9 @@ bool sensors_init_request;
 
 String deviceIdentification = "allccccccccmmmmmmvvvxxx";
 
+/**********************************************
+ *       ✨Class declarations here ✨        *
+ **********************************************/
 
 class sensor{
   public:
@@ -44,7 +49,7 @@ class BME_Sensor : public sensor{
     bme.performReading();
     return (bme.readTemperature()); 
   }
-
+   
   int get_sensor_address() override{
     return address;
   }
@@ -114,7 +119,6 @@ class BME_altitude : public BME_Sensor{
   String get_sensor_name() override{
     return name;
   }
-
 };
 
 class BME_humidty : public BME_Sensor{
@@ -157,8 +161,6 @@ class BH_Sensor : public sensor{
     return name;
   }
 };
-
-// BME_Sensor* bme_sensor = new BME_Sensor();
 
 
 class SDI12_device { 
@@ -221,6 +223,10 @@ class SDI12_device {
     }
 };
 
+/**********************************************
+ *       Class initialisation🔥               *
+ **********************************************/
+
 SDI12_device* this_device = new SDI12_device();
 
 BME_altitude* altitude_sensor = new BME_altitude();
@@ -228,6 +234,9 @@ BME_humidty* humidity_sensor = new BME_humidty();
 BME_temprature* temperature_sensor = new BME_temprature();
 BH_Sensor* bh_sensor = new BH_Sensor();
 
+/**********************************************
+ *       SD1-12 Function declaration 📱        *
+ **********************************************/
 
 void SDI12Send(String message) {
   Serial.print("message: "); Serial.println(message);
@@ -321,6 +330,11 @@ int SDI12Receive(String input) {
 }
 
 
+/**********************************************
+ *       Default Arduino Setup function       *
+ **********************************************/
+
+
 void setup() {
   //Arduino IDE Serial Monitors
   Serial.begin(9600);
@@ -333,6 +347,10 @@ void setup() {
   //HIGH to Receive from SDI-12
   digitalWrite(DIRO, HIGH);
 }
+
+/**********************************************
+ *       Default Arduino Main function       *
+ **********************************************/
 
 void loop() {
   int byte;
