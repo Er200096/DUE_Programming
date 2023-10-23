@@ -3,7 +3,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME680.h>
 #include <BH1750.h>
-#include <Array.h>
 #include <LinkedList.h>
 #include <OneWire.h>
 
@@ -29,6 +28,99 @@ int value_sent;
 int device_address_to;
 
 bool sensors_init_request;
+
+
+
+
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
+#include <SPI.h> // allowing to communicate with SPI libraries
+#include <Scheduler.h> // allows to run multiple functions simoultaneously
+
+
+#define TFT_CS    10 // essential definitions for TFT display
+#define TFT_RST   6
+#define TFT_DC    7
+#define TFT_SCLK 13  
+#define TFT_MOSI 11  
+
+ 
+//Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS,  TFT_DC, TFT_RST);
+
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+
+ 
+void reset_screen(){ // Use this to reset the screen back to black
+
+  tft.fillScreen(ST77XX_BLACK);
+
+}
+
+ 
+
+int buttonPin = 2; // referring to button 1 on the board
+
+int buttonState = 0; // the state of the button before an action
+
+int oldButtonState = LOW; // allows for a toggle function
+
+
+void drawtext(const String &text, uint16_t color, float x, float y, int size) { // function to allow for easy displaying words to screen
+
+  tft.setCursor(x, y); // position on screen
+  tft.setTextColor(color); // colour of text
+  tft.setTextWrap(true); // allows it to write to next line when reaching end of display
+  tft.setTextSize(size); // size of text
+  
+  tft.println(text); 
+
+}
+
+  void CoolMenu(){ // function for the menu which appears in the beginning
+    drawtext("Welcome!", ST77XX_YELLOW, 38, 30, 2); 
+    drawtext("Please Press Button 1 to    Toggle to a Different            Sensor",ST77XX_WHITE, 10, 70, 1);
+
+    delay(4000);
+
+    tft.fillScreen(ST77XX_BLACK); //filling screen in black
+  }
+ 
+
+int xPos = 0; // position of X
+
+int graph_type = 0; //types of graphs starts from 0
+
+void change_graph(){ // function for changing the graph to display another measurement
+
+  graph_type++; // graphs increment by 1
+  Serial.println(graph_type); // displaying in serial monitor which graph is on screen
+  delay(50);
+
+}
+
+
+void drawGraph(int type) { // funciton needed to draw the graph
+
+  int value = 10*type; // This would be: this_device -> get_a_sensor(type);
+
+  String name  = "Sensor: " + String(type); // This would be this_device->get_sensor_name();
+
+  drawtext(name,ST77XX_WHITE,52,10,1); // displaying the name of the on-screen graph
+
+  int yPos = map(value, 0, 1023, tft.height() - 1, 0);  // y value starts at 0 - Value for sensor
+
+  tft.drawPixel(xPos, yPos, ST77XX_GREEN); // drawing the line
+
+  xPos++; // adds one to the next positon for x values
+
+  if (xPos >= tft.width()) { // funciton to ensure the code moves from left to right 
+
+    xPos = 0;
+    tft.fillScreen(ST77XX_BLACK);
+    Serial.println(type);
+
+  }
+}
 
 
 /**********************************************
@@ -385,12 +477,22 @@ void setup() {
   Serial.begin(9600);
   Serial.println("SETUP");
   // this_device.initialize_attached_sensors();
+  pinMode(buttonPin, INPUT_PULLUP);
 
-  Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
-  pinMode(DIRO, OUTPUT);               //DIRO Pin
+    tft.initR(INITR_BLACKTAB);      // initiaises the TFT display
+    tft.setRotation(3); //Ensures the rotation is correct
+    tft.fillScreen(ST77XX_BLACK);
+
+    CoolMenu();
+    delay(100);
+   
+    Serial.println("GUI INITIALISATION COMPLETE"); //graphical user interface
+
+    Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
+    pinMode(DIRO, OUTPUT);               //DIRO Pin
 
   //HIGH to Receive from SDI-12
-  digitalWrite(DIRO, HIGH);
+    digitalWrite(DIRO, HIGH);
 }
 
 /**********************************************
@@ -414,5 +516,8 @@ void loop() {
       Raw_command += char(byte);      //append byte to command string
       }
     }
+  }
+  else{
+    drawGraph(graph_type);
   }
 }
