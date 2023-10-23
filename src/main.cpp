@@ -78,7 +78,6 @@ class BME_Sensor : public sensor{
   }
 };
 
-
 class BME_temprature : public BME_Sensor{
   int address = 2;
   String name = "Temperature Sensor";
@@ -171,12 +170,15 @@ class BH_Sensor : public sensor{
   }
 };
 
+OneWire ds(8);
+
+
+byte addr[] = {0x2D, 0x4B , 0xFF , 0x67 , 0x40 , 0x0 , 0x0 , 0xB4}; //insert the Address of EEPROM value into here after you run the searchFunction
 
 class SDI12_device { 
   // This class is the main class that that has a bunch of sensors attached to it
   // and will handle sensor initialization
-  protected:
-    OneWire ds(8);
+  private:
 
     void save_to_EEPROM(String data){   
       char dataChars[30];
@@ -206,21 +208,23 @@ class SDI12_device {
       return String((char*)dataBytes).substring(3);
     }
 
-    
-  
-
   public:
-    LinkedList<sensor*> sensor_list; // List of pointers to sensors
-    int deviceAddress = 0; // The default device address
+    LinkedList<sensor*> sensor_list; // List of pointers to 
 
+    int deviceAddress = (readFromEEPROM(1))? readFromEEPROM(1).toInt() : 0; // If it cant find anything on the eeprom, it defaults to 0; 
+    
     int get_device_address() {
       return deviceAddress; 
       }
-    
+
       String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929xxx...xx<CR><LF>");
 
     void set_device_address(int set_deviceAddress) { 
+      save_to_EEPROM(String(set_deviceAddress)); // Saves the new device ID to eeprom
+      Serial.println("saved to EEPROM");
+     
       deviceAddress = set_deviceAddress; 
+      
       }
       
       void attach_sensor(sensor* sensor){
@@ -275,7 +279,7 @@ BME_temprature* temperature_sensor = new BME_temprature();
 BH_Sensor* bh_sensor = new BH_Sensor();
 
 /**********************************************
- *       SD1-12 Function declaration 📱        *
+ *       SD1-12 Function declaration 📱       *
  **********************************************/
 
 void SDI12Send(String message) {
