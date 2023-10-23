@@ -5,6 +5,7 @@
 #include <BH1750.h>
 #include <LinkedList.h>
 #include <OneWire.h>
+#include <Scheduler.h>
 
 // #include "SuperWatchDog.h"
 
@@ -18,6 +19,7 @@ BH1750 lightMeter(0x23);
 #define DIRO 7
 #define Num_Of_Sensors 3
 #define watchdog_time 3000 // 3 seconds
+#define BUTTON_PIN 2
 
 
 String command;
@@ -27,10 +29,7 @@ int target_address;
 int value_sent;
 int device_address_to;
 
-bool sensors_init_request;
-
-
-
+volatile  bool sensors_init_request;
 
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
@@ -42,85 +41,27 @@ bool sensors_init_request;
 #define TFT_RST   6
 #define TFT_DC    7
 #define TFT_SCLK 13  
-#define TFT_MOSI 11  
-
- 
+#define TFT_MOSI 11   
 //Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS,  TFT_DC, TFT_RST);
 
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
- 
-void reset_screen(){ // Use this to reset the screen back to black
+#include <DueTimer.h>
+#include <SdFat.h>
+#include <RTClib.h>
 
-  tft.fillScreen(ST77XX_BLACK);
+RTC_DS1307 rtc;
+SdFs sd;
+FsFile file;
+int BUZZER = 6;
 
-}
-
- 
-
-int buttonPin = 2; // referring to button 1 on the board
-
-int buttonState = 0; // the state of the button before an action
-
-int oldButtonState = LOW; // allows for a toggle function
-
-
-void drawtext(const String &text, uint16_t color, float x, float y, int size) { // function to allow for easy displaying words to screen
-
-  tft.setCursor(x, y); // position on screen
-  tft.setTextColor(color); // colour of text
-  tft.setTextWrap(true); // allows it to write to next line when reaching end of display
-  tft.setTextSize(size); // size of text
-  
-  tft.println(text); 
-
-}
-
-  void CoolMenu(){ // function for the menu which appears in the beginning
-    drawtext("Welcome!", ST77XX_YELLOW, 38, 30, 2); 
-    drawtext("Please Press Button 1 to    Toggle to a Different            Sensor",ST77XX_WHITE, 10, 70, 1);
-
-    delay(4000);
-
-    tft.fillScreen(ST77XX_BLACK); //filling screen in black
-  }
- 
-
-int xPos = 0; // position of X
-
-int graph_type = 0; //types of graphs starts from 0
-
-void change_graph(){ // function for changing the graph to display another measurement
-
-  graph_type++; // graphs increment by 1
-  Serial.println(graph_type); // displaying in serial monitor which graph is on screen
-  delay(50);
-
-}
-
-
-void drawGraph(int type) { // funciton needed to draw the graph
-
-  int value = 10*type; // This would be: this_device -> get_a_sensor(type);
-
-  String name  = "Sensor: " + String(type); // This would be this_device->get_sensor_name();
-
-  drawtext(name,ST77XX_WHITE,52,10,1); // displaying the name of the on-screen graph
-
-  int yPos = map(value, 0, 1023, tft.height() - 1, 0);  // y value starts at 0 - Value for sensor
-
-  tft.drawPixel(xPos, yPos, ST77XX_GREEN); // drawing the line
-
-  xPos++; // adds one to the next positon for x values
-
-  if (xPos >= tft.width()) { // funciton to ensure the code moves from left to right 
-
-    xPos = 0;
-    tft.fillScreen(ST77XX_BLACK);
-    Serial.println(type);
-
-  }
-}
+// Pin Assignments
+const uint8_t SD_CS_PIN = A3;
+const uint8_t SOFT_MISO_PIN = 12;
+const uint8_t SOFT_MOSI_PIN = 11;
+const uint8_t SOFT_SCK_PIN = 13;
+SoftSpiDriver<SOFT_MISO_PIN, SOFT_MOSI_PIN, SOFT_SCK_PIN> softSpi;
+#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(0), &softSpi) 
 
 
 /**********************************************
@@ -209,7 +150,7 @@ class BME_altitude : public BME_Sensor{
   int address = 4;
   float get_raw_value() override{
     bme.performReading();
-    return (bme.readAltitude(0)); 
+    return (bme.readAltitude(1013.25)); 
   }
   
   int get_sensor_address() override{
@@ -267,96 +208,76 @@ OneWire ds(8);
 
 byte addr[] = {0x2D, 0x4B , 0xFF , 0x67 , 0x40 , 0x0 , 0x0 , 0xB4}; //insert the Address of EEPROM value into here after you run the searchFunction
 
-class SDI12_device { 
-  // This class is the main class that that has a bunch of sensors attached to it
-  // and will handle sensor initialization
-  private:
 
-    void save_to_EEPROM(String data){   
-      char dataChars[30];
-      data.toCharArray(dataChars, 30);
-      // Write the data to the EEPROM
-      ds.reset(); //reset device
-      ds.select(addr);//select address of device to talk to
-      ds.write(0x0F,1);   // Write ScratchPad       Configuration/mode bytes can be in datasheet
-      ds.write(0x01,1);   //TA1 addresses           TA (Target Address) can also be found in the datasheet
-      ds.write(0x09,1);   //TA2 addresses
-      for ( int i = 0; i < data.length(); i++) {
-        ds.write(dataChars[i],1);
-      }
-      ds.reset();
-      ds.select(addr);
-      ds.write(0x0F, 1);  // Copy ScratchPad 
-    }
 
-    String readFromEEPROM(int length) {
-      byte dataBytes[30];
-      ds.reset();
-      ds.select(addr);
-      ds.write(0xAA);  // Read Scratchpad
-      for (int i = 0; i < length+4; i++) {
-        dataBytes[i] = ds.read();
-      }
-      return String((char*)dataBytes).substring(3);
-    }
-
+class SDI12_device {
   public:
-    LinkedList<sensor*> sensor_list; // List of pointers to 
-
-    int deviceAddress = (readFromEEPROM(1))? readFromEEPROM(1).toInt() : 0; // If it cant find anything on the eeprom, it defaults to 0; 
-    
+    LinkedList<sensor*> sensor_list;
+    int deviceAddress = 0;
+  
     int get_device_address() {
-      return deviceAddress; 
+      return deviceAddress;
+    }
+  
+    String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929");
+  
+    void set_device_address(int set_deviceAddress) {
+      deviceAddress = set_deviceAddress;
+    }
+  
+    void attach_sensor(sensor* sensor) {
+      sensor_list.add(sensor); // add sensor to device by adding pointer to sensor list
+    }
+  
+    String Read_a_Sensor(int deviceAddress) {
+      if (sensor_list.size() >= deviceAddress) {
+        return String(sensor_list.get(deviceAddress - 1)->get_raw_value());
       }
-
-      String sensor_ID = String(String(get_device_address()) + "14ENG20009103218929xxx...xx<CR><LF>");
-
-    void set_device_address(int set_deviceAddress) { 
-      save_to_EEPROM(String(set_deviceAddress)); // Saves the new device ID to eeprom
-      Serial.println("saved to EEPROM");
-     
-      deviceAddress = set_deviceAddress; 
-      
+      else {
+        return (String("-"));   // return "-" if device address is out of bounds
       }
-      
-      void attach_sensor(sensor* sensor){
-        sensor_list.add(sensor);
-        //sensors.push_back(sensor);
-      }
-
-      String Read_a_Sensor(int deviceAddress){
-        if(sensor_list.size() >= deviceAddress){
-          return String(sensor_list.get(deviceAddress-1)->get_raw_value());
-          } 
-        else{
-        return (String("-"));
-        }
-      }
-
+    }
+  
     String Read_Sensors() {
       String output;
-      watchdogReset();
+      output += String(get_device_address());
       for (int i = 0; i < sensor_list.size(); i++) {
-        output += String(sensor_list.get(i)->get_raw_value()) + String("\n");
+        output +=  " : " + String(sensor_list.get(i)->get_raw_value());
       }
       return output;
     }
+  
+    void initialize_attached_sensors() {
+      for (int i = 0; i < sensor_list.size(); i++) {
+        sensor_list.get(i)->setup_sensor();
+      }
+    }
+  
+    // format sensor data for SD card storage
+    String pretty_print_sensor_values() {
+      String output;
+      for (int i = 0; i < sensor_list.size(); i++) {
+          String sensorName = sensor_list.get(i)->get_sensor_name();
+          float rawValue = sensor_list.get(i)->get_raw_value();
+          String unit = "";
 
-      void initialize_attached_sensors(){
-      watchdogReset();
-      for (int i = 0; i <= sensor_list.size()-1; i++) { // Should be -1
-        Serial.println("Sensor initialized ");
-          sensor_list.get(i)->setup_sensor();
-        }
+          // Add units based on the sensor type
+          if (sensorName.equals("Pressure sensor (BME680)")) {
+              unit = " hPa";
+          } else if (sensorName.equals("Light sensor (BH1750)")) {
+              unit = " lux";
+          } else if (sensorName.equals("Temperature sensor (BME680)")) {
+              unit = "°C";
+          } else if (sensorName.equals("Humidity sensor (BME680)")) {
+              unit = "%";
+          } else if (sensorName.equals("Altitude sensor (BME680)")) {
+              unit = " meters";
+          }
+          // Format sensor value with appropriate unit
+          output += sensorName + " : " + String(rawValue, 2) + unit + "\n";
       }
-
-      String pretty_print_sensor_values(String TIME){ // USE THE RTC value for this
-        String output;
-        for (int i = 0; i < sensor_list.size(); i++) {
-          output += String(sensor_list.get(i)->get_sensor_name()) +" : " + String(sensor_list.get(i)->get_raw_value()) + String("\n");
-      }
-      return output; // Note To This is basically the output you wanna use to write to the sensor output file
-      }
+      return output;
+    }
 };
 
 /**********************************************
@@ -416,6 +337,7 @@ void prase_command(String this_command, int device_address = 0,int value_set = 0
 
         sensors_init_request = true;
       }
+
       else{
           Serial.println("Sensors already initialized");
       }
@@ -467,9 +389,137 @@ int SDI12Receive(String input) {
     return 1;
 }
 
+
+/**********************************************
+ *       GUI SETUP                           *
+ **********************************************/
+
+void reset_screen(){ // Use this to reset the screen back to black
+  tft.fillScreen(ST77XX_BLACK);
+}
+
+int buttonPin = 2; // referring to button 1 on the board
+int buttonState = 0; // the state of the button before an action
+int oldButtonState = LOW; // allows for a toggle function
+
+
+void drawtext(const String &text, uint16_t color, float x, float y, int size) { // function to allow for easy displaying words to screen
+
+  tft.setCursor(x, y); // position on screen
+  tft.setTextColor(color); // colour of text
+  tft.setTextWrap(true); // allows it to write to next line when reaching end of display
+  tft.setTextSize(size); // size of text
+  
+  tft.println(text); 
+}
+
+  void CoolMenu(){ // function for the menu which appears in the beginning
+    drawtext("Welcome!", ST77XX_YELLOW, 38, 30, 2); 
+    drawtext("Please Press Button 1 to    Toggle to a Different            Sensor",ST77XX_WHITE, 10, 70, 1);
+
+    delay(4000);
+
+    tft.fillScreen(ST77XX_BLACK); //filling screen in black
+  }
+ 
+
+int xPos = 0; // position of X
+
+int graph_type = 1; //types of graphs starts from 0
+
+
+
+void drawGraph(int type) { // funciton needed to draw the graph
+
+  int value = (this_device->Read_a_Sensor(1)).toInt(); // This would be: this_device -> get_a_sensor(type);
+  String name  = "Sensor: " + String(type); // This would be this_device->get_sensor_name();
+  drawtext(name,ST77XX_WHITE,52,10,1); // displaying the name of the on-screen graph
+  int yPos = map(value, 0, 1023, tft.height() - 1, 0);  // y value starts at 0 - Value for sensor
+  tft.drawPixel(xPos, yPos, ST77XX_GREEN); // drawing the line
+  xPos++; // adds one to the next positon for x values
+
+  if (xPos >= tft.width()) { // funciton to ensure the code moves from left to right 
+    xPos = 0;
+    tft.fillScreen(ST77XX_BLACK);
+    Serial.println(type);
+  }
+}
+
+
+void SDI12_command_center() {
+    if (Serial1.available()) {
+        byte incomingByte = Serial1.read();  // Read incoming communication in bytes
+        if (incomingByte == 33) {  // If byte is command terminator (!)
+            SDI12Receive(Raw_command);
+            Raw_command = "";  // Reset command string
+        } else {
+            if (incomingByte != 0) {  // Do not add start bit (0)
+                Raw_command += char(incomingByte);  // Append byte to command string
+            }
+        }
+    }
+    yield();
+}
+
+ // TIME
+
+void WriteSD(FsFile file, String sensorData) {
+  Serial.println("---   Saving To File   ---");       // Serial message to show the function is called
+  file.open("dataLogger.txt", O_WRITE | O_APPEND);    // Open the file to write at the end of the script
+  file.println(sensorData);                           // Write the passed parameter sensorData into the file
+  file.close();
+}
+
+void ReadSD(FsFile file) {
+  Serial.println("--- Reading From file! ---");       // Serial message to show the function is called
+  file.open("dataLogger.txt", O_RDWR);                // Open the file to read/write
+  file.seek(0);                                       // Set the pointer to char 0
+  String contents = file.readString();                // Obtain file contents as a string via readString()
+  Serial.println(contents);                           // Print the contents string to the serial
+  file.close();
+}
+
+String GetTime() {
+  DateTime now = rtc.now();
+  int hours = now.hour();
+  int minutes = now.minute();
+  int seconds = now.second();
+
+  String currentTime = "Current time (RTC) : " + String(hours) + ":" + String(minutes) + ":" + String(seconds); 
+  return currentTime;         // return formatted string of RTC time 
+}
+
+void buzzBuzzer() {
+  digitalWrite(BUZZER, HIGH);         // Turn on the buzzer
+  delay(500);                         // Buzz for 500 ms
+  digitalWrite(BUZZER, LOW);          // Turn off the buzzer
+  delay(500);                         // Pause for 500 ms
+}
+
+void log_data(){
+  if(sensors_init_request){
+    Serial.println(this_device->pretty_print_sensor_values());
+    String currentTime = GetTime();
+     String Sensor_Values = this_device->pretty_print_sensor_values();     // send sensor data to be formatted using pretty_print_sensor_values()
+    WriteSD(file, currentTime);
+    WriteSD(file, Sensor_Values);
+    Serial.println("Hello, data has been logged");
+
+  }
+}
+
+
 /**********************************************
  *       Default Arduino Setup function       *
  **********************************************/
+void next_graph(){
+  if(sensors_init_request){
+    Serial.println("hey I was pressed");
+    Serial.println(this_device->Read_a_Sensor(1));
+    reset_screen();
+    graph_type++;
+  }
+}
 
 
 void setup() {
@@ -483,9 +533,7 @@ void setup() {
     tft.setRotation(3); //Ensures the rotation is correct
     tft.fillScreen(ST77XX_BLACK);
 
-    CoolMenu();
-    delay(100);
-   
+    // CoolMenu();
     Serial.println("GUI INITIALISATION COMPLETE"); //graphical user interface
 
     Serial1.begin(1200, SERIAL_7E1);  //SDI-12 UART, configures serial port for 7 data bits, even parity, and 1 stop bit
@@ -493,31 +541,42 @@ void setup() {
 
   //HIGH to Receive from SDI-12
     digitalWrite(DIRO, HIGH);
+
+    // attachInterrupt(BUTTON_PIN,next_graph,RISING); 
+    Scheduler.startLoop(SDI12_command_center);
+    
+
+  if (!sd.begin(SD_CONFIG)) {
+    Serial.println("SD card initialization failed!");     // check if SD card is initialized
+    sd.initErrorHalt();
+    while (1);
+  }
+    if (!file.open("dataLogger.txt", O_RDWR | O_CREAT)) {
+      sd.errorHalt(F("File open failed!"));       // check if file is opened
+  }
+
+  file.close(); // Release file
+
 }
 
 /**********************************************
  *       Default Arduino Main function       *
  **********************************************/
+unsigned long previousMillis;
 
 void loop() {
   int byte;
   //Receive SDI-12 over UART and then print to Serial Monitor
   watchdogReset();
-
-  if(Serial1.available()) {
-    byte = Serial1.read();        //Reads incoming communication in bytes
-    // Serial.println(byte);
-    if (byte == 33) {             //If byte is command terminator (!)
-      SDI12Receive(Raw_command);
-      // Serial.println(command);
-      Raw_command = "";               //reset command string
-    } else {
-      if (byte != 0) {            //do not add start bit (0)
-      Raw_command += char(byte);      //append byte to command string
-      }
-    }
+  delay(1000);  
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= 2000) {
+    previousMillis = currentMillis;
+    log_data();
+    // Code to execute every 1 second
   }
-  else{
-    drawGraph(graph_type);
+
+  if(sensors_init_request){
+  // drawGraph(graph_type); 
   }
 }
